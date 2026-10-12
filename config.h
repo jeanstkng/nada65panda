@@ -28,7 +28,6 @@
 #define RGB_MATRIX_DEFAULT_MODE RGB_MATRIX_CYCLE_LEFT_RIGHT
 #endif
 
-#define NO_SUSPEND_POWER_DOWN
 
 /*
  * Keyboard Matrix Assignments
@@ -57,7 +56,7 @@
 #define WS2812_DI_PIN B15
 
 // PWM RGB Underglow Defines
-#define WS2812_SPI SPID2
+#define WS2812_SPI_DRIVER SPID2
 #define WS2812_SPI_MOSI_PAL_MODE 0
 #define WS2812_SPI_SCK_PAL_MODE 0
 #define WS2812_SPI_SCK_PIN B13

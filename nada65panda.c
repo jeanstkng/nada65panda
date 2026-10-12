@@ -17,6 +17,8 @@
 #include "nada65panda.h"
 
 #include "i2c_master.h"
+#include "usb_util.h"
+#include <string.h>
 
 #define LOOP_10HZ_PERIOD 100
 
@@ -25,6 +27,36 @@ extern void rgb_matrix_update_pwm_buffers(void);
 uint8_t side_cmd[9] = {0x5a, 0x12, 0xff, 0xff, 0xff, 0x40, 0x80, 0x0, 0x0};
 uint8_t default_side_cmd[9] = {0x5a, 0x12, 0xff, 0xff, 0xff,
                                0x40, 0x80, 0x0,  0x0};
+
+static bool side_lights_suspended = false;
+
+static void transmit_side_lights(bool suspended) {
+  // The side controller keeps running on battery; preserve the user's mode.
+  uint8_t cmd[sizeof(side_cmd)];
+  memcpy(cmd, side_cmd, sizeof(cmd));
+  if (suspended) {
+    cmd[1] = 0;
+  }
+  if (i2c_transmit(0x8a, cmd, sizeof(cmd), 100) == I2C_STATUS_SUCCESS) {
+    side_lights_suspended = suspended;
+  }
+}
+
+static void set_side_lights_suspended(bool suspended) {
+  if (side_lights_suspended != suspended) {
+    transmit_side_lights(suspended);
+  }
+}
+
+void suspend_power_down_kb(void) {
+  set_side_lights_suspended(true);
+  suspend_power_down_user();
+}
+
+void suspend_wakeup_init_kb(void) {
+  set_side_lights_suspended(!usb_connected_state());
+  suspend_wakeup_init_user();
+}
 
 deferred_token loop10hz_token = INVALID_DEFERRED_TOKEN;
 
@@ -136,7 +168,7 @@ void keyboard_post_init_kb(void) {
 
   side_cmd[5] = 0x40 / 4 * (user_config.side_rgb_value);
   side_cmd[6] = 0xff / 5 * (user_config.side_rgb_speed + 1);
-  i2c_transmit(0x8a, side_cmd, 9, 100);
+  transmit_side_lights(!usb_connected_state());
 
   loop10hz_token = defer_exec(LOOP_10HZ_PERIOD, loop_10Hz, NULL);
 }
@@ -208,7 +240,7 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
       default:
         side_cmd[1] = 0x12;
       }
-      i2c_transmit(0x8a, side_cmd, 9, 100);
+      transmit_side_lights(!usb_connected_state());
     }
     return false;
   case S_COLOR:
@@ -267,7 +299,7 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
         side_cmd[3] = 0;
         side_cmd[4] = 0;
       }
-      i2c_transmit(0x8a, side_cmd, 9, 100);
+      transmit_side_lights(!usb_connected_state());
     }
     return false;
   case S_SPEED:
@@ -277,7 +309,7 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
         user_config.side_rgb_speed = 0;
       eeconfig_update_user(user_config.raw);
       side_cmd[6] = 0xff / 5 * (user_config.side_rgb_speed + 1);
-      i2c_transmit(0x8a, side_cmd, 9, 100);
+      transmit_side_lights(!usb_connected_state());
     }
     return false;
   case S_VALUE:
@@ -287,7 +319,7 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
         user_config.side_rgb_value = 0;
       eeconfig_update_user(user_config.raw);
       side_cmd[5] = 0x40 / 4 * (user_config.side_rgb_value);
-      i2c_transmit(0x8a, side_cmd, 9, 100);
+      transmit_side_lights(!usb_connected_state());
     }
     return false;
   }
@@ -295,6 +327,7 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
 }
 
 uint32_t loop_10Hz(uint32_t trigger_time, void *cb_arg) {
+  set_side_lights_suspended(!usb_connected_state());
   extend_deferred_exec(loop10hz_token, LOOP_10HZ_PERIOD);
 
   if (rgb_press_timer && timer_elapsed32(rgb_press_timer) > 3000) {
@@ -303,9 +336,9 @@ uint32_t loop_10Hz(uint32_t trigger_time, void *cb_arg) {
     uint8_t i;
 
     // power on first to avoid RGB_TOGGLE_OFF
-    setPinOutput(A8);
-    writePinHigh(A8);
-    writePinHigh(RGB_EN_PIN);
+    gpio_set_pin_output(A8);
+    gpio_write_pin_high(A8);
+    gpio_write_pin_high(RGB_EN_PIN);
     // power on first to avoid RGB_TOGGLE_OFF
 
     for (i = 0; i < 3; i++) {
