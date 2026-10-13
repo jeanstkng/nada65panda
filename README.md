@@ -53,7 +53,7 @@ qmk compile -kb cerakey/nada65panda -km via
 qmk flash cerakey_nada65panda_via.bin
 ```
 
-4. When it prompts you to set your keyboard in bootloader mode. Disconnect your keyboard, then plug it back in while holding the ESC key!
+4. When prompted for bootloader mode, hold Fn and press B (Windows or Mac). Saved VIA mappings can override the firmware defaults. Holding Esc during a fresh startup is the Bootmagic fallback and clears saved EEPROM settings.
 
 5. Wait till the flashing process is complete.
 
